@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>My YouTube</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://accounts.google.com/gsi/client"></script>
+
 <style>
 :root {
   --bg: #0f0f0f;
@@ -335,7 +335,7 @@ header{
 
 <!-- LOGIN -->
 <div id="login-screen">
-  <div class="login-card">
+  <div class="login-card" onclick="if(event.target.id==='loginBtn'||event.target.closest('#loginBtn')){doLogin();}">
     <div class="login-logo">My <span>YouTube</span></div>
     <p class="login-sub">Your full YouTube experience — cleaner, yours.</p>
     <div class="feat-list">
@@ -346,7 +346,7 @@ header{
       <div class="feat"><div class="feat-ic">🕐</div>Watch history</div>
       <div class="feat"><div class="feat-ic">👍</div>Like, comment & subscribe</div>
     </div>
-    <button class="g-btn" id="loginBtn">
+    <button class="g-btn" id="loginBtn" onclick="doLogin()">
       <svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
       Sign in with Google
     </button>
@@ -459,100 +459,72 @@ header{
 
 <script>
 const CLIENT_ID = '909075845825-g5v00qddgbgqoo5g3r2slt6vre6vigm8.apps.googleusercontent.com';
-const SCOPES = [
-  'https://www.googleapis.com/auth/youtube.readonly',
-  'https://www.googleapis.com/auth/youtube.force-ssl',
-  'https://www.googleapis.com/auth/userinfo.profile',
-  'https://www.googleapis.com/auth/userinfo.email'
-].join(' ');
+const SCOPES = 'https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.force-ssl https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
+const YT = 'https://www.googleapis.com/youtube/v3';
 
 let token = null, user = null, currentVideoId = null, sidebarOpen = true;
 let likedVideos = new Set(), watchHistory = [], descExpanded = false;
 
-// ── TOAST
-function toast(msg, ms=2800) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'), ms);
-}
+// ── Check for OAuth token in URL hash on page load
+(function checkToken(){
+  const hash = window.location.hash;
+  if(hash && hash.includes('access_token')){
+    const p = new URLSearchParams(hash.replace('#','?'));
+    const t = p.get('access_token');
+    if(t){ window.__oauthToken = t; history.replaceState(null,'',location.pathname); }
+  }
+})();
 
-// ── LOGIN
+// ── LOGIN - simple redirect flow
 function doLogin(){
-  if(typeof google==='undefined'){
-    toast('⏳ Still loading, please wait 2 seconds and try again...');
-    return;
-  }
-  try {
-    google.accounts.oauth2.initTokenClient({
-      client_id: CLIENT_ID,
-      scope: SCOPES,
-      callback: async r => {
-        if(r.error){ toast('Sign-in error: ' + r.error); return; }
-        token = r.access_token;
-        await fetchUser();
-        document.getElementById('login-screen').style.display='none';
-        document.getElementById('app').style.display='block';
-        loadSubChannels();
-        navigate('home');
-      }
-    }).requestAccessToken();
-  } catch(e) {
-    toast('❌ Login failed: ' + e.message);
-    console.error('Login error:', e);
-  }
+  const redirectUri = location.origin + location.pathname;
+  const url = 'https://accounts.google.com/o/oauth2/v2/auth'
+    + '?client_id=' + encodeURIComponent(CLIENT_ID)
+    + '&redirect_uri=' + encodeURIComponent(redirectUri)
+    + '&response_type=token'
+    + '&scope=' + encodeURIComponent(SCOPES)
+    + '&prompt=select_account';
+  window.location.href = url;
 }
 
-// Wait for Google script to be ready then enable button
-document.getElementById('loginBtn').addEventListener('click', doLogin);
-window.addEventListener('load', function(){
-  var tries = 0;
-  var check = setInterval(function(){
-    tries++;
-    if(typeof google !== 'undefined'){
-      clearInterval(check);
-      console.log('Google Sign-In ready!');
-    } else if(tries > 30){
-      clearInterval(check);
-      document.getElementById('loginBtn').textContent = '⚠ Reload page and try again';
-    }
-  }, 300);
-});
+// ── API helper
+async function api(url, opts={}){
+  const r = await fetch(url, {headers:{Authorization:'Bearer '+token}, ...opts});
+  if(!r.ok) throw new Error(r.status + ' ' + url);
+  return r.json();
+}
 
+// ── TOAST
+function toast(msg, ms=2800){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),ms);
+}
+
+// ── FETCH USER
 async function fetchUser(){
   user = await api('https://www.googleapis.com/oauth2/v2/userinfo');
   const name = user.name||user.email||'User';
   const init = name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
-  document.getElementById('avInit').textContent = init;
-  if(user.picture){
-    document.getElementById('avInit').outerHTML=`<img src="${user.picture}" style="width:34px;height:34px;border-radius:50%;object-fit:cover;" alt="avatar">`;
+  const avInit = document.getElementById('avInit');
+  if(avInit) avInit.textContent = init;
+  if(user.picture && avInit){
+    avInit.outerHTML=`<img src="${user.picture}" style="width:34px;height:34px;border-radius:50%;object-fit:cover;" alt="avatar">`;
   }
   document.getElementById('umName').textContent = name;
   document.getElementById('umEmail').textContent = user.email||'';
 }
 
-// ── API
-async function api(url, opts={}){
-  const r = await fetch(url,{headers:{Authorization:`Bearer ${token}`},...opts});
-  if(!r.ok) throw new Error(`${r.status}`);
-  return r.json();
-}
-const YT = 'https://www.googleapis.com/youtube/v3';
-
-// ── SIDEBAR TOGGLE
+// ── SIDEBAR
 const sidebar = document.getElementById('sidebar');
 const mainContent = document.getElementById('main-content');
 document.getElementById('menuToggle').addEventListener('click',()=>{
-  if(window.innerWidth<=768){
-    sidebar.classList.toggle('mobile-open');
-  } else {
-    sidebarOpen = !sidebarOpen;
-    sidebar.classList.toggle('collapsed',!sidebarOpen);
-    mainContent.classList.toggle('expanded',!sidebarOpen);
-  }
+  if(window.innerWidth<=768){ sidebar.classList.toggle('mobile-open'); }
+  else { sidebarOpen=!sidebarOpen; sidebar.classList.toggle('collapsed',!sidebarOpen); mainContent.classList.toggle('expanded',!sidebarOpen); }
 });
 
 // ── AVATAR MENU
-document.getElementById('avatarBtn').addEventListener('click', e=>{
+document.getElementById('avatarBtn').addEventListener('click',e=>{
   e.stopPropagation();
   document.getElementById('user-menu').classList.toggle('open');
 });
@@ -566,32 +538,24 @@ document.getElementById('logoutBtn').addEventListener('click',()=>{
 document.getElementById('homeLogoBtn').addEventListener('click',()=>navigate('home'));
 
 // ── SEARCH
-document.getElementById('searchForm').addEventListener('submit', async e=>{
+document.getElementById('searchForm').addEventListener('submit',async e=>{
   e.preventDefault();
-  const q = document.getElementById('searchInput').value.trim();
+  const q=document.getElementById('searchInput').value.trim();
   if(!q) return;
-  navigate('search', {q});
+  navigate('search',{q});
 });
 
 // ── NAVIGATION
-let currentNav = 'home';
-function navigate(page, params={}){
-  currentNav = page;
+let currentNav='home';
+function navigate(page,params={}){
+  currentNav=page;
   document.getElementById('user-menu').classList.remove('open');
   if(window.innerWidth<=768) sidebar.classList.remove('mobile-open');
-
-  // Update active nav
-  document.querySelectorAll('[data-nav]').forEach(el=>el.classList.toggle('active', el.dataset.nav===page));
-
+  document.querySelectorAll('[data-nav]').forEach(el=>el.classList.toggle('active',el.dataset.nav===page));
   showBrowse();
-
-  const chips = document.getElementById('chips');
-  chips.style.display = 'none';
-  chips.innerHTML = '';
-
-  const content = document.getElementById('page-content');
-  content.innerHTML = loading();
-
+  const chips=document.getElementById('chips');
+  chips.style.display='none'; chips.innerHTML='';
+  document.getElementById('page-content').innerHTML=loading();
   if(page==='home') loadHome();
   else if(page==='shorts') loadShorts();
   else if(page==='subscriptions') loadSubscriptions();
@@ -600,62 +564,37 @@ function navigate(page, params={}){
   else if(page==='liked') loadLiked();
   else if(page==='watchlater') loadWatchLater();
   else if(page==='search') loadSearch(params.q);
-  else if(page==='channel') loadChannel(params.id, params.title);
+  else if(page==='channel') loadChannel(params.id,params.title);
 }
 
-function showBrowse(){
-  document.getElementById('browse-page').style.display='block';
-  document.getElementById('watch-page').classList.remove('active');
-}
-function showWatch(){
-  document.getElementById('browse-page').style.display='none';
-  document.getElementById('watch-page').classList.add('active');
-}
+function showBrowse(){ document.getElementById('browse-page').style.display='block'; document.getElementById('watch-page').classList.remove('active'); }
+function showWatch(){ document.getElementById('browse-page').style.display='none'; document.getElementById('watch-page').classList.add('active'); }
 
 // ── HOME
 async function loadHome(){
   try {
-    // Get subscription channel IDs
-    const subs = await api(`${YT}/subscriptions?part=snippet&mine=true&maxResults=15&order=relevance`);
+    const subs=await api(`${YT}/subscriptions?part=snippet&mine=true&maxResults=15&order=relevance`);
     if(!subs.items?.length){ document.getElementById('page-content').innerHTML=emptyState('📺','No subscriptions yet','Subscribe to channels on YouTube first!'); return; }
-
-    const channelIds = subs.items.map(s=>s.snippet.resourceId.channelId).join(',');
-
-    // Get recent videos
-    const vids = await api(`${YT}/search?part=snippet&channelId=${channelIds.split(',').slice(0,5).join(',')}&maxResults=20&order=date&type=video`);
-
-    // Also get popular videos mixed in
-    let allItems = vids.items||[];
-    allItems = allItems.sort(()=>Math.random()-0.5);
-
-    document.getElementById('page-content').innerHTML = `<div class="video-grid" id="vgrid"></div>`;
-    renderVideoCards(allItems, 'vgrid');
+    const ids=subs.items.slice(0,5).map(s=>s.snippet.resourceId.channelId).join(',');
+    const vids=await api(`${YT}/search?part=snippet&channelId=${ids}&maxResults=20&order=date&type=video`);
+    let items=(vids.items||[]).sort(()=>Math.random()-0.5);
+    document.getElementById('page-content').innerHTML=`<div class="video-grid" id="vgrid"></div>`;
+    renderVideoCards(items,'vgrid');
   } catch(e){ document.getElementById('page-content').innerHTML=errState(e.message); }
 }
 
 // ── SHORTS
 async function loadShorts(){
   try {
-    const data = await api(`${YT}/search?part=snippet&q=shorts&videoDuration=short&type=video&maxResults=24&order=viewCount`);
-    const items = data.items||[];
+    const data=await api(`${YT}/search?part=snippet&q=shorts&videoDuration=short&type=video&maxResults=24&order=viewCount`);
     document.getElementById('page-content').innerHTML=`<div class="shorts-grid" id="sgrid"></div>`;
-    const grid = document.getElementById('sgrid');
-    items.forEach((item,i)=>{
-      const s=item.snippet, vid=item.id?.videoId;
-      if(!vid) return;
+    const grid=document.getElementById('sgrid');
+    (data.items||[]).forEach((item,i)=>{
+      const s=item.snippet,vid=item.id?.videoId; if(!vid) return;
       const thumb=s.thumbnails?.high?.url||s.thumbnails?.medium?.url||'';
-      const card=document.createElement('div');
-      card.className='short-card';
-      card.style.animationDelay=`${i*0.04}s`;
-      card.innerHTML=`
-        <img src="${thumb}" alt="${esc(s.title)}" loading="lazy">
-        <div class="short-play"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
-        <div class="short-overlay">
-          <div class="short-title">${esc(s.title)}</div>
-          <div class="short-views">${timeAgo(s.publishedAt)}</div>
-        </div>`;
-      card.addEventListener('click',()=>openWatch(vid,s));
-      grid.appendChild(card);
+      const card=document.createElement('div'); card.className='short-card';
+      card.innerHTML=`<img src="${thumb}" loading="lazy"><div class="short-play"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div><div class="short-overlay"><div class="short-title">${esc(s.title)}</div><div class="short-views">${timeAgo(s.publishedAt)}</div></div>`;
+      card.addEventListener('click',()=>openWatch(vid,s)); grid.appendChild(card);
     });
   } catch(e){ document.getElementById('page-content').innerHTML=errState(e.message); }
 }
@@ -663,81 +602,50 @@ async function loadShorts(){
 // ── SUBSCRIPTIONS
 async function loadSubscriptions(){
   try {
-    const data = await api(`${YT}/subscriptions?part=snippet,contentDetails&mine=true&maxResults=50&order=alphabetical`);
-    const items = data.items||[];
-    if(!items.length){ document.getElementById('page-content').innerHTML=emptyState('📺','No subscriptions','Subscribe to channels on YouTube first!'); return; }
-
-    document.getElementById('page-content').innerHTML=`<div class="video-grid" id="sub-ch-grid"></div>`;
-    const grid = document.getElementById('sub-ch-grid');
-
-    items.forEach((item,i)=>{
+    const data=await api(`${YT}/subscriptions?part=snippet&mine=true&maxResults=50&order=alphabetical`);
+    if(!data.items?.length){ document.getElementById('page-content').innerHTML=emptyState('📺','No subscriptions','Subscribe to channels first!'); return; }
+    document.getElementById('page-content').innerHTML=`<div class="video-grid" id="sub-grid"></div>`;
+    const grid=document.getElementById('sub-grid');
+    data.items.forEach((item,i)=>{
       const s=item.snippet;
       const thumb=s.thumbnails?.medium?.url||s.thumbnails?.default?.url||'';
-      const card=document.createElement('div');
-      card.className='vcard';
-      card.style.animationDelay=`${i*0.03}s`;
-      card.innerHTML=`
-        <div style="display:flex;align-items:center;gap:12px;padding:10px;background:var(--card);border-radius:var(--radius);transition:background 0.15s;">
-          <img src="${thumb}" style="width:50px;height:50px;border-radius:50%;object-fit:cover;" onerror="this.style.background='var(--card2)'">
-          <div>
-            <div style="font-weight:700;font-size:0.9rem;">${esc(s.title)}</div>
-            <div style="font-size:0.73rem;color:var(--muted);margin-top:2px;">${esc(s.description?.slice(0,80)||'Channel')}</div>
-          </div>
-          <span style="margin-left:auto;color:var(--muted);">›</span>
-        </div>`;
+      const card=document.createElement('div'); card.className='vcard';
+      card.innerHTML=`<div style="display:flex;align-items:center;gap:12px;padding:10px;background:var(--card);border-radius:var(--radius);"><img src="${thumb}" style="width:50px;height:50px;border-radius:50%;object-fit:cover;"><div><div style="font-weight:700;font-size:0.9rem;">${esc(s.title)}</div><div style="font-size:0.73rem;color:var(--muted);margin-top:2px;">${esc(s.description?.slice(0,80)||'Channel')}</div></div><span style="margin-left:auto;color:var(--muted);">›</span></div>`;
       card.addEventListener('click',()=>navigate('channel',{id:s.resourceId.channelId,title:s.title}));
       grid.appendChild(card);
     });
   } catch(e){ document.getElementById('page-content').innerHTML=errState(e.message); }
 }
 
-// ── CHANNEL PAGE
-async function loadChannel(channelId, channelTitle){
+// ── CHANNEL
+async function loadChannel(channelId,channelTitle){
   document.getElementById('page-content').innerHTML=loading();
   try {
-    const data = await api(`${YT}/search?part=snippet&channelId=${channelId}&maxResults=24&order=date&type=video`);
-    document.getElementById('page-content').innerHTML=`
-      <h2 style="font-size:1.1rem;font-weight:700;margin-bottom:16px;">📺 ${esc(channelTitle)}</h2>
-      <div class="video-grid" id="chvid"></div>`;
-    renderVideoCards(data.items||[], 'chvid');
+    const data=await api(`${YT}/search?part=snippet&channelId=${channelId}&maxResults=24&order=date&type=video`);
+    document.getElementById('page-content').innerHTML=`<h2 style="font-size:1.1rem;font-weight:700;margin-bottom:16px;">📺 ${esc(channelTitle)}</h2><div class="video-grid" id="chvid"></div>`;
+    renderVideoCards(data.items||[],'chvid');
   } catch(e){ document.getElementById('page-content').innerHTML=errState(e.message); }
 }
 
 // ── HISTORY
 async function loadHistory(){
   try {
-    const data = await api(`${YT}/videos?part=snippet,contentDetails&myRating=none&maxResults=50`);
-    // Use activity API for actual history
-    const activity = await api(`${YT}/activities?part=snippet,contentDetails&mine=true&maxResults=50`);
-    const items = (activity.items||[]).filter(a=>a.snippet?.type==='upload'||a.contentDetails?.upload);
-
+    const activity=await api(`${YT}/activities?part=snippet,contentDetails&mine=true&maxResults=50`);
+    const items=(activity.items||[]).filter(a=>a.contentDetails?.upload);
     if(!items.length){
-      // Fallback: show liked
-      const liked = await api(`${YT}/videos?part=snippet&myRating=like&maxResults=20`);
-      if(!liked.items?.length){ document.getElementById('page-content').innerHTML=emptyState('🕐','No history','Start watching videos to see your history here!'); return; }
-      document.getElementById('page-content').innerHTML=`<h3 style="margin-bottom:16px;font-size:0.9rem;color:var(--muted);">Recent activity</h3><div class="video-grid" id="hist-grid"></div>`;
-      renderVideoCards(liked.items.map(v=>({id:{videoId:v.id},snippet:v.snippet})), 'hist-grid');
-      return;
+      const liked=await api(`${YT}/videos?part=snippet&myRating=like&maxResults=20`);
+      if(!liked.items?.length){ document.getElementById('page-content').innerHTML=emptyState('🕐','No history','Start watching videos!'); return; }
+      document.getElementById('page-content').innerHTML=`<div class="video-grid" id="hist-grid"></div>`;
+      renderVideoCards(liked.items.map(v=>({id:{videoId:v.id},snippet:v.snippet})),'hist-grid'); return;
     }
-
     document.getElementById('page-content').innerHTML=`<div class="history-list" id="hist-list"></div>`;
-    const list = document.getElementById('hist-list');
+    const list=document.getElementById('hist-list');
     items.forEach(item=>{
-      const s=item.snippet;
-      const vid=item.contentDetails?.upload?.videoId;
-      if(!vid) return;
+      const s=item.snippet,vid=item.contentDetails?.upload?.videoId; if(!vid) return;
       const thumb=s.thumbnails?.medium?.url||'';
-      const div=document.createElement('div');
-      div.className='hist-item';
-      div.innerHTML=`
-        <div class="hist-thumb"><img src="${thumb}" loading="lazy"></div>
-        <div class="hist-info">
-          <div class="hist-title">${esc(s.title)}</div>
-          <div class="hist-ch">${esc(s.channelTitle||'')}</div>
-          <div class="hist-date">${timeAgo(s.publishedAt)}</div>
-        </div>`;
-      div.addEventListener('click',()=>openWatch(vid,s));
-      list.appendChild(div);
+      const div=document.createElement('div'); div.className='hist-item';
+      div.innerHTML=`<div class="hist-thumb"><img src="${thumb}" loading="lazy"></div><div class="hist-info"><div class="hist-title">${esc(s.title)}</div><div class="hist-ch">${esc(s.channelTitle||'')}</div><div class="hist-date">${timeAgo(s.publishedAt)}</div></div>`;
+      div.addEventListener('click',()=>openWatch(vid,s)); list.appendChild(div);
     });
   } catch(e){ document.getElementById('page-content').innerHTML=errState(e.message); }
 }
@@ -745,185 +653,118 @@ async function loadHistory(){
 // ── PLAYLISTS
 async function loadPlaylists(){
   try {
-    const data = await api(`${YT}/playlists?part=snippet,contentDetails&mine=true&maxResults=50`);
-    const items = data.items||[];
-    if(!items.length){ document.getElementById('page-content').innerHTML=emptyState('📋','No playlists','Create playlists on YouTube to see them here!'); return; }
-
+    const data=await api(`${YT}/playlists?part=snippet,contentDetails&mine=true&maxResults=50`);
+    if(!data.items?.length){ document.getElementById('page-content').innerHTML=emptyState('📋','No playlists','Create playlists on YouTube first!'); return; }
     document.getElementById('page-content').innerHTML=`<div class="playlist-grid" id="pl-grid"></div>`;
-    const grid = document.getElementById('pl-grid');
-    items.forEach((item,i)=>{
-      const s=item.snippet, cd=item.contentDetails;
+    const grid=document.getElementById('pl-grid');
+    data.items.forEach(item=>{
+      const s=item.snippet,cd=item.contentDetails;
       const thumb=s.thumbnails?.medium?.url||s.thumbnails?.default?.url||'';
-      const card=document.createElement('div');
-      card.className='pl-card';
-      card.innerHTML=`
-        <div class="pl-thumb">
-          <img src="${thumb}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;" loading="lazy">
-          <div class="pl-count">${cd?.itemCount||0}<span>videos</span></div>
-        </div>
-        <div class="pl-info">
-          <div class="pl-title">${esc(s.title)}</div>
-          <div class="pl-meta">${esc(s.description?.slice(0,60)||'Playlist')}</div>
-        </div>`;
+      const card=document.createElement('div'); card.className='pl-card';
+      card.innerHTML=`<div class="pl-thumb"><img src="${thumb}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;" loading="lazy"><div class="pl-count">${cd?.itemCount||0}<span>videos</span></div></div><div class="pl-info"><div class="pl-title">${esc(s.title)}</div><div class="pl-meta">${esc(s.description?.slice(0,60)||'Playlist')}</div></div>`;
       card.addEventListener('click',()=>loadPlaylistVideos(item.id,s.title));
       grid.appendChild(card);
     });
   } catch(e){ document.getElementById('page-content').innerHTML=errState(e.message); }
 }
 
-async function loadPlaylistVideos(plId, plTitle){
+async function loadPlaylistVideos(plId,plTitle){
   document.getElementById('page-content').innerHTML=loading();
   try {
-    const data = await api(`${YT}/playlistItems?part=snippet&playlistId=${plId}&maxResults=50`);
-    const items = (data.items||[]).map(i=>({id:{videoId:i.snippet?.resourceId?.videoId},snippet:i.snippet})).filter(i=>i.id.videoId);
-    document.getElementById('page-content').innerHTML=`
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
-        <button onclick="loadPlaylists()" style="background:var(--card2);border:none;border-radius:8px;color:var(--text);cursor:pointer;font-size:0.8rem;padding:6px 12px;">← Back</button>
-        <h2 style="font-size:1rem;font-weight:700;">${esc(plTitle)}</h2>
-      </div>
-      <div class="video-grid" id="plvid"></div>`;
+    const data=await api(`${YT}/playlistItems?part=snippet&playlistId=${plId}&maxResults=50`);
+    const items=(data.items||[]).map(i=>({id:{videoId:i.snippet?.resourceId?.videoId},snippet:i.snippet})).filter(i=>i.id.videoId);
+    document.getElementById('page-content').innerHTML=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;"><button onclick="loadPlaylists()" style="background:var(--card2);border:none;border-radius:8px;color:var(--text);cursor:pointer;font-size:0.8rem;padding:6px 12px;">← Back</button><h2 style="font-size:1rem;font-weight:700;">${esc(plTitle)}</h2></div><div class="video-grid" id="plvid"></div>`;
     renderVideoCards(items,'plvid');
   } catch(e){ document.getElementById('page-content').innerHTML=errState(e.message); }
 }
 
-// ── LIKED VIDEOS
+// ── LIKED
 async function loadLiked(){
   try {
-    const data = await api(`${YT}/videos?part=snippet,contentDetails&myRating=like&maxResults=50`);
-    const items = data.items||[];
-    if(!items.length){ document.getElementById('page-content').innerHTML=emptyState('👍','No liked videos','Like videos on YouTube to see them here!'); return; }
+    const data=await api(`${YT}/videos?part=snippet,contentDetails&myRating=like&maxResults=50`);
+    if(!data.items?.length){ document.getElementById('page-content').innerHTML=emptyState('👍','No liked videos','Like videos to see them here!'); return; }
     document.getElementById('page-content').innerHTML=`<div class="video-grid" id="liked-grid"></div>`;
-    renderVideoCards(items.map(v=>({id:{videoId:v.id},snippet:v.snippet})),'liked-grid');
+    renderVideoCards(data.items.map(v=>({id:{videoId:v.id},snippet:v.snippet})),'liked-grid');
   } catch(e){ document.getElementById('page-content').innerHTML=errState(e.message); }
 }
 
 // ── WATCH LATER
 async function loadWatchLater(){
-  // Watch Later is a special playlist
   try {
-    const ch = await api(`${YT}/channels?part=contentDetails&mine=true`);
-    const wlId = ch.items?.[0]?.contentDetails?.relatedPlaylists?.watchLater;
-    if(!wlId){ document.getElementById('page-content').innerHTML=emptyState('⏰','Watch Later unavailable','YouTube restricts Watch Later API access.'); return; }
-    const data = await api(`${YT}/playlistItems?part=snippet&playlistId=${wlId}&maxResults=50`);
-    const items = (data.items||[]).map(i=>({id:{videoId:i.snippet?.resourceId?.videoId},snippet:i.snippet})).filter(i=>i.id.videoId);
+    const ch=await api(`${YT}/channels?part=contentDetails&mine=true`);
+    const wlId=ch.items?.[0]?.contentDetails?.relatedPlaylists?.watchLater;
+    if(!wlId){ document.getElementById('page-content').innerHTML=emptyState('⏰','Watch Later','YouTube restricts Watch Later API access.'); return; }
+    const data=await api(`${YT}/playlistItems?part=snippet&playlistId=${wlId}&maxResults=50`);
+    const items=(data.items||[]).map(i=>({id:{videoId:i.snippet?.resourceId?.videoId},snippet:i.snippet})).filter(i=>i.id.videoId);
     if(!items.length){ document.getElementById('page-content').innerHTML=emptyState('⏰','Watch Later is empty','Save videos to watch them later!'); return; }
     document.getElementById('page-content').innerHTML=`<div class="video-grid" id="wl-grid"></div>`;
     renderVideoCards(items,'wl-grid');
-  } catch(e){ document.getElementById('page-content').innerHTML=emptyState('⏰','Watch Later','YouTube restricts Watch Later access via the API.'); }
+  } catch(e){ document.getElementById('page-content').innerHTML=emptyState('⏰','Watch Later','YouTube restricts Watch Later API access.'); }
 }
 
 // ── SEARCH
 async function loadSearch(q){
   document.getElementById('page-content').innerHTML=loading();
   try {
-    const data = await api(`${YT}/search?part=snippet&q=${encodeURIComponent(q)}&maxResults=24&type=video&order=relevance`);
-    const items = data.items||[];
-    document.getElementById('page-content').innerHTML=`
-      <div style="font-size:0.85rem;color:var(--muted);margin-bottom:16px;">Results for "<strong style="color:var(--text);">${esc(q)}</strong>" — ${items.length} videos</div>
-      <div class="video-grid" id="search-grid"></div>`;
+    const data=await api(`${YT}/search?part=snippet&q=${encodeURIComponent(q)}&maxResults=24&type=video&order=relevance`);
+    const items=data.items||[];
+    document.getElementById('page-content').innerHTML=`<div style="font-size:0.85rem;color:var(--muted);margin-bottom:16px;">Results for "<strong style="color:var(--text);">${esc(q)}</strong>"</div><div class="video-grid" id="search-grid"></div>`;
     renderVideoCards(items,'search-grid');
   } catch(e){ document.getElementById('page-content').innerHTML=errState(e.message); }
 }
 
 // ── RENDER VIDEO CARDS
-function renderVideoCards(items, gridId){
-  const grid = document.getElementById(gridId);
-  if(!grid) return;
+function renderVideoCards(items,gridId){
+  const grid=document.getElementById(gridId); if(!grid) return;
   if(!items.length){ grid.innerHTML=emptyState('🎬','No videos found',''); return; }
   items.forEach((item,i)=>{
-    const s=item.snippet, vid=item.id?.videoId||item.id;
-    if(!vid||!s) return;
+    const s=item.snippet,vid=item.id?.videoId||item.id; if(!vid||!s) return;
     const thumb=s.thumbnails?.medium?.url||s.thumbnails?.default?.url||'';
-    const chThumb='';
-    const card=document.createElement('div');
-    card.className='vcard';
+    const card=document.createElement('div'); card.className='vcard';
     card.style.animation=`fadeUp 0.3s ease ${i*0.04}s both`;
-    card.innerHTML=`
-      <div class="vcard-thumb">
-        <img src="${thumb}" alt="${esc(s.title)}" loading="lazy" onerror="this.src=''">
-      </div>
-      <div class="vcard-info">
-        <img class="vchannel-av" src="" style="display:none;" alt="">
-        <div class="vcard-text">
-          <div class="vcard-title">${esc(s.title)}</div>
-          <div class="vcard-meta">
-            <span class="vcard-channel-name">${esc(s.channelTitle||'')}</span>
-            <span>${timeAgo(s.publishedAt)}</span>
-          </div>
-        </div>
-      </div>`;
-    card.addEventListener('click',()=>openWatch(vid,s));
-    grid.appendChild(card);
+    card.innerHTML=`<div class="vcard-thumb"><img src="${thumb}" alt="${esc(s.title)}" loading="lazy"></div><div class="vcard-info"><div class="vcard-text"><div class="vcard-title">${esc(s.title)}</div><div class="vcard-meta"><span class="vcard-channel-name">${esc(s.channelTitle||'')}</span><span>${timeAgo(s.publishedAt)}</span></div></div></div>`;
+    card.addEventListener('click',()=>openWatch(vid,s)); grid.appendChild(card);
   });
 }
 
-// ── OPEN WATCH PAGE
-async function openWatch(videoId, snippet){
-  currentVideoId = videoId;
-  showWatch();
+// ── OPEN WATCH
+async function openWatch(videoId,snippet){
+  currentVideoId=videoId; showWatch();
   window.scrollTo({top:0,behavior:'smooth'});
-
-  // Set player
   document.getElementById('videoFrame').src=`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1&iv_load_policy=3`;
-  document.getElementById('watchTitle').textContent = snippet?.title||'';
-
-  // Add to local history
-  watchHistory.unshift({videoId,snippet,watchedAt:new Date().toISOString()});
-
-  // Actions bar
-  buildWatchActions(videoId);
-
-  // Channel row
-  buildChannelRow(snippet);
-
-  // Description
-  buildDescription(snippet);
-
-  // Load comments + up next async
-  loadComments(videoId);
-  loadUpNext(snippet?.channelId||'');
-
-  // Get full video details
+  document.getElementById('watchTitle').textContent=snippet?.title||'';
+  buildWatchActions(videoId); buildChannelRow(snippet); buildDescription(snippet);
+  loadComments(videoId); loadUpNext(snippet?.channelId||'');
   try {
-    const data = await api(`${YT}/videos?part=snippet,statistics,contentDetails&id=${videoId}`);
-    const v = data.items?.[0];
-    if(v){
-      const stats=v.statistics||{};
-      document.getElementById('descViews').textContent=`${fmtNum(stats.viewCount||0)} views • ${timeAgo(v.snippet?.publishedAt)}`;
-      buildWatchActions(videoId, stats);
-      buildChannelRow(v.snippet, stats);
-      buildDescription(v.snippet);
-    }
+    const data=await api(`${YT}/videos?part=snippet,statistics&id=${videoId}`);
+    const v=data.items?.[0]; if(!v) return;
+    document.getElementById('descViews').textContent=`${fmtNum(v.statistics?.viewCount||0)} views • ${timeAgo(v.snippet?.publishedAt)}`;
+    buildWatchActions(videoId,v.statistics||{}); buildChannelRow(v.snippet,v.statistics||{}); buildDescription(v.snippet);
   } catch{}
 }
 
-function buildWatchActions(videoId, stats={}){
-  const liked = likedVideos.has(videoId);
+function buildWatchActions(videoId,stats={}){
+  const liked=likedVideos.has(videoId);
   document.getElementById('watchActions').innerHTML=`
     <button class="act-btn ${liked?'liked':''}" onclick="toggleLike('${videoId}')">👍 ${fmtNum(stats.likeCount||0)||'Like'}</button>
-    <button class="act-btn" onclick="toast('👎 Dislike noted (YouTube hides dislikes)')">👎 Dislike</button>
+    <button class="act-btn" onclick="toast('YouTube hides dislikes')">👎 Dislike</button>
     <button class="act-btn" onclick="shareVideo('${videoId}')">↗ Share</button>
     <button class="act-btn" onclick="saveToWatchLater('${videoId}')">⏰ Save</button>
     <button class="act-btn" onclick="window.open('https://www.youtube.com/watch?v=${videoId}','_blank')">▶ YouTube</button>`;
 }
 
-function buildChannelRow(snippet, stats={}){
+function buildChannelRow(snippet,stats={}){
   const chId=snippet?.channelId||'';
   document.getElementById('channelRow').innerHTML=`
     <img class="ch-avatar" src="${snippet?.thumbnails?.default?.url||''}" alt="" onerror="this.style.display='none'">
-    <div class="ch-info">
-      <div class="ch-name" onclick="navigate('channel',{id:'${chId}',title:'${esc(snippet?.channelTitle||'')}'})">
-        ${esc(snippet?.channelTitle||'')}
-      </div>
-      <div class="ch-subs">${fmtNum(stats.subscriberCount||0)} subscribers</div>
-    </div>
+    <div class="ch-info"><div class="ch-name" onclick="navigate('channel',{id:'${chId}',title:'${esc(snippet?.channelTitle||'')}'})">
+    ${esc(snippet?.channelTitle||'')}</div><div class="ch-subs">${fmtNum(stats.subscriberCount||0)} subscribers</div></div>
     <button class="sub-btn" onclick="subscribeChannel('${chId}',this)">Subscribe</button>`;
 }
 
 function buildDescription(snippet){
-  const desc=snippet?.description||'No description available.';
   descExpanded=false;
-  document.getElementById('descText').textContent=desc;
+  document.getElementById('descText').textContent=snippet?.description||'No description.';
   document.getElementById('descText').className='desc-short';
   document.getElementById('descToggle').textContent='Show more';
   document.getElementById('descBox').className='desc-box';
@@ -943,97 +784,60 @@ async function loadComments(videoId){
   try {
     const data=await api(`${YT}/commentThreads?part=snippet&videoId=${videoId}&maxResults=20&order=relevance`);
     const items=data.items||[];
-    const avSrc=user?.picture?`<img src="${user.picture}" class="comment-av" style="width:36px;height:36px;border-radius:50%;object-fit:cover;">`:
+    const avHtml=user?.picture?`<img src="${user.picture}" class="comment-av" style="width:36px;height:36px;border-radius:50%;object-fit:cover;">`:
       `<div class="comment-av av-init" style="width:36px;height:36px;border-radius:50%;background:var(--red);display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;color:#fff;">${(user?.name||'?')[0].toUpperCase()}</div>`;
-
-    sec.innerHTML=`
-      <div class="comments-header">${fmtNum(items.length||0)} Comments</div>
-      <div class="comment-input-row">
-        ${avSrc}
-        <div class="comment-input">
-          <input type="text" id="commentInput" placeholder="Add a comment..." />
-          <div class="comment-btns">
-            <button class="cbtn" onclick="document.getElementById('commentInput').value=''">Cancel</button>
-            <button class="cbtn primary" onclick="postComment('${videoId}')">Comment</button>
-          </div>
-        </div>
-      </div>
-      <div id="comment-list"></div>`;
-
+    sec.innerHTML=`<div class="comments-header">${items.length} Comments</div>
+      <div class="comment-input-row">${avHtml}<div class="comment-input">
+        <input type="text" id="commentInput" placeholder="Add a comment..."/>
+        <div class="comment-btns">
+          <button class="cbtn" onclick="document.getElementById('commentInput').value=''">Cancel</button>
+          <button class="cbtn primary" onclick="postComment('${videoId}')">Comment</button>
+        </div></div></div><div id="comment-list"></div>`;
     const list=document.getElementById('comment-list');
     items.forEach(item=>{
       const top=item.snippet?.topLevelComment?.snippet||{};
-      const av=top.authorProfileImageUrl||'';
-      const div=document.createElement('div');
-      div.className='comment-item';
-      div.innerHTML=`
-        <img src="${av}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.style.background='var(--card2)'">
-        <div class="comment-body">
-          <div class="comment-author">${esc(top.authorDisplayName||'User')}<span>${timeAgo(top.publishedAt)}</span></div>
-          <div class="comment-text">${esc(top.textOriginal||'')}</div>
-          <div class="comment-acts">
-            <button onclick="toast('👍 Liked comment!')">👍 ${fmtNum(top.likeCount||0)}</button>
-            <button onclick="toast('↩ Reply feature coming soon!')">↩ Reply</button>
-          </div>
-        </div>`;
+      const div=document.createElement('div'); div.className='comment-item';
+      div.innerHTML=`<img src="${top.authorProfileImageUrl||''}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.style.background='var(--card2)'">
+        <div class="comment-body"><div class="comment-author">${esc(top.authorDisplayName||'User')}<span>${timeAgo(top.publishedAt)}</span></div>
+        <div class="comment-text">${esc(top.textOriginal||'')}</div>
+        <div class="comment-acts"><button onclick="toast('👍')">👍 ${fmtNum(top.likeCount||0)}</button><button onclick="toast('Reply coming soon!')">↩ Reply</button></div></div>`;
       list.appendChild(div);
     });
   } catch(e){
-    sec.innerHTML=`<div class="comments-header">Comments</div><div style="color:var(--muted);font-size:0.82rem;padding:20px 0;">Comments are disabled or unavailable for this video.</div>`;
+    sec.innerHTML=`<div class="comments-header">Comments</div><div style="color:var(--muted);font-size:0.82rem;padding:20px 0;">Comments unavailable for this video.</div>`;
   }
 }
 
 async function postComment(videoId){
   const input=document.getElementById('commentInput');
-  const text=input.value.trim();
-  if(!text){toast('Write something first!'); return;}
+  const text=input.value.trim(); if(!text){toast('Write something first!');return;}
   try {
-    await fetch(`${YT}/commentThreads?part=snippet`,{
-      method:'POST',
-      headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
-      body:JSON.stringify({snippet:{videoId,topLevelComment:{snippet:{textOriginal:text}}}})
-    });
-    input.value='';
-    toast('✅ Comment posted!');
-    // Add it locally
+    await fetch(`${YT}/commentThreads?part=snippet`,{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+      body:JSON.stringify({snippet:{videoId,topLevelComment:{snippet:{textOriginal:text}}}})});
+    input.value=''; toast('✅ Comment posted!');
     const list=document.getElementById('comment-list');
-    const div=document.createElement('div');
-    div.className='comment-item';
-    const avSrc=user?.picture?`<img src="${user.picture}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;">`:
+    const div=document.createElement('div'); div.className='comment-item';
+    const avHtml=user?.picture?`<img src="${user.picture}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;">`:
       `<div style="width:36px;height:36px;border-radius:50%;background:var(--red);display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;color:#fff;flex-shrink:0;">${(user?.name||'?')[0].toUpperCase()}</div>`;
-    div.innerHTML=`${avSrc}<div class="comment-body"><div class="comment-author">${esc(user?.name||'You')}<span>just now</span></div><div class="comment-text">${esc(text)}</div></div>`;
+    div.innerHTML=`${avHtml}<div class="comment-body"><div class="comment-author">${esc(user?.name||'You')}<span>just now</span></div><div class="comment-text">${esc(text)}</div></div>`;
     list.prepend(div);
-  } catch(e){
-    toast('⚠ Could not post comment. Check API permissions.');
-  }
+  } catch(e){ toast('⚠ Could not post comment'); }
 }
 
 // ── UP NEXT
 async function loadUpNext(channelId){
-  const el=document.getElementById('upNext');
-  el.innerHTML=loading();
+  const el=document.getElementById('upNext'); el.innerHTML=loading();
   try {
     const data=await api(`${YT}/search?part=snippet&channelId=${channelId}&maxResults=10&type=video&order=date`);
     el.innerHTML='';
     (data.items||[]).forEach(item=>{
-      const s=item.snippet,vid=item.id?.videoId;
-      if(!vid) return;
+      const s=item.snippet,vid=item.id?.videoId; if(!vid) return;
       const thumb=s.thumbnails?.medium?.url||'';
-      const card=document.createElement('div');
-      card.className='mini-card';
-      card.innerHTML=`
-        <div class="mini-thumb">
-          <img src="${thumb}" loading="lazy">
-        </div>
-        <div class="mini-info">
-          <div class="mini-title">${esc(s.title)}</div>
-          <div class="mini-ch">${esc(s.channelTitle||'')}</div>
-          <div class="mini-views">${timeAgo(s.publishedAt)}</div>
-        </div>`;
-      card.addEventListener('click',()=>openWatch(vid,s));
-      el.appendChild(card);
+      const card=document.createElement('div'); card.className='mini-card';
+      card.innerHTML=`<div class="mini-thumb"><img src="${thumb}" loading="lazy"></div><div class="mini-info"><div class="mini-title">${esc(s.title)}</div><div class="mini-ch">${esc(s.channelTitle||'')}</div><div class="mini-views">${timeAgo(s.publishedAt)}</div></div>`;
+      card.addEventListener('click',()=>openWatch(vid,s)); el.appendChild(card);
     });
-    if(!el.children.length) el.innerHTML=`<div style="color:var(--muted);font-size:0.82rem;">No suggestions available</div>`;
+    if(!el.children.length) el.innerHTML=`<div style="color:var(--muted);font-size:0.82rem;">No suggestions</div>`;
   } catch(){ el.innerHTML=`<div style="color:var(--muted);font-size:0.82rem;">Could not load suggestions</div>`; }
 }
 
@@ -1041,46 +845,39 @@ async function loadUpNext(channelId){
 async function toggleLike(videoId){
   const liked=likedVideos.has(videoId);
   try {
-    await fetch(`${YT}/videos/rate?id=${videoId}&rating=${liked?'none':'like'}`,{method:'POST',headers:{Authorization:`Bearer ${token}`}});
+    await fetch(`${YT}/videos/rate?id=${videoId}&rating=${liked?'none':'like'}`,{method:'POST',headers:{Authorization:'Bearer '+token}});
     if(liked) likedVideos.delete(videoId); else likedVideos.add(videoId);
-    buildWatchActions(videoId);
-    toast(liked?'👎 Removed like':'👍 Liked!');
+    buildWatchActions(videoId); toast(liked?'👎 Removed like':'👍 Liked!');
   } catch(){ toast('⚠ Could not update like'); }
 }
 
 // ── SUBSCRIBE
-async function subscribeChannel(channelId, btn){
+async function subscribeChannel(channelId,btn){
   try {
-    await fetch(`${YT}/subscriptions?part=snippet`,{
-      method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
-      body:JSON.stringify({snippet:{resourceId:{kind:'youtube#channel',channelId}}})
-    });
-    btn.textContent='Subscribed ✓';
-    btn.classList.add('subscribed');
-    toast('✅ Subscribed!');
-  } catch(){ toast('⚠ Could not subscribe — may already be subscribed'); }
+    await fetch(`${YT}/subscriptions?part=snippet`,{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+      body:JSON.stringify({snippet:{resourceId:{kind:'youtube#channel',channelId}}})});
+    btn.textContent='Subscribed ✓'; btn.classList.add('subscribed'); toast('✅ Subscribed!');
+  } catch(){ toast('⚠ Already subscribed or could not subscribe'); }
 }
 
 // ── SHARE
 function shareVideo(videoId){
   const url=`https://youtu.be/${videoId}`;
-  if(navigator.share){navigator.share({title:'Check this out!',url}).catch(()=>{});}
-  else {navigator.clipboard?.writeText(url).then(()=>toast('🔗 Link copied!')).catch(()=>toast('Link: '+url));}
+  if(navigator.share){ navigator.share({title:'Check this out!',url}).catch(()=>{}); }
+  else { navigator.clipboard?.writeText(url).then(()=>toast('🔗 Link copied!')).catch(()=>toast('Link: '+url)); }
 }
 
 // ── SAVE TO WATCH LATER
 async function saveToWatchLater(videoId){
-  toast('⏰ Saving to Watch Later...');
+  toast('⏰ Saving...');
   try {
     const ch=await api(`${YT}/channels?part=contentDetails&mine=true`);
     const wlId=ch.items?.[0]?.contentDetails?.relatedPlaylists?.watchLater;
-    if(!wlId){toast('⚠ Watch Later not accessible'); return;}
-    await fetch(`${YT}/playlistItems?part=snippet`,{
-      method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
-      body:JSON.stringify({snippet:{playlistId:wlId,resourceId:{kind:'youtube#video',videoId}}})
-    });
+    if(!wlId){toast('⚠ Watch Later not accessible');return;}
+    await fetch(`${YT}/playlistItems?part=snippet`,{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+      body:JSON.stringify({snippet:{playlistId:wlId,resourceId:{kind:'youtube#video',videoId}}})});
     toast('✅ Saved to Watch Later!');
-  } catch(){ toast('⚠ Could not save — YouTube restricts Watch Later API'); }
+  } catch(){ toast('⚠ Could not save to Watch Later'); }
 }
 
 // ── LOAD SUB CHANNELS IN SIDEBAR
@@ -1091,28 +888,48 @@ async function loadSubChannels(){
     (data.items||[]).forEach(item=>{
       const s=item.snippet;
       const thumb=s.thumbnails?.default?.url||'';
-      const el=document.createElement('div');
-      el.className='nav-item';
-      el.innerHTML=`<img src="${thumb}" style="width:22px;height:22px;border-radius:50%;object-fit:cover;" onerror="this.style.background='var(--card2)'">${esc(s.title)}`;
+      const el=document.createElement('div'); el.className='nav-item';
+      el.innerHTML=`<img src="${thumb}" style="width:22px;height:22px;border-radius:50%;object-fit:cover;">${esc(s.title)}`;
       el.addEventListener('click',()=>navigate('channel',{id:s.resourceId.channelId,title:s.title}));
       list.appendChild(el);
     });
   } catch{}
 }
 
+// ── CLOSE WATCH
+document.getElementById('closePlayer') && document.getElementById('closePlayer').addEventListener('click',()=>{
+  document.getElementById('watch-page').classList.remove('active');
+  document.getElementById('browse-page').style.display='block';
+  document.getElementById('videoFrame').src='';
+});
+
 // ── HELPERS
 function loading(){return `<div class="loader-wrap"><div class="ld"><span></span><span></span><span></span></div>&nbsp;Loading...</div>`;}
 function emptyState(emoji,title,sub){return `<div class="empty-state"><span class="emoji">${emoji}</span><h3>${esc(title)}</h3><p>${esc(sub)}</p></div>`;}
 function errState(msg){return `<div class="empty-state"><span class="emoji">⚠</span><h3>Something went wrong</h3><p>${esc(msg)}</p></div>`;}
-
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function fmtNum(n){n=parseInt(n)||0;if(n>=1e9)return(n/1e9).toFixed(1)+'B';if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'K';return String(n);}
 function timeAgo(d){if(!d)return'';const s=(Date.now()-new Date(d))/1000;if(s<60)return'just now';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';if(s<2592000)return Math.floor(s/86400)+'d ago';if(s<31536000)return Math.floor(s/2592000)+'mo ago';return Math.floor(s/31536000)+'y ago';}
 
-// Fade up animation
 const style=document.createElement('style');
 style.textContent='@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}';
 document.head.appendChild(style);
+
+// ── INIT: auto-login if token found in URL hash
+window.addEventListener('DOMContentLoaded', async function(){
+  if(window.__oauthToken){
+    token = window.__oauthToken;
+    try {
+      await fetchUser();
+      document.getElementById('login-screen').style.display='none';
+      document.getElementById('app').style.display='block';
+      loadSubChannels();
+      navigate('home');
+    } catch(e){
+      toast('Login error: ' + e.message);
+    }
+  }
+});
 </script>
 </body>
 </html>
