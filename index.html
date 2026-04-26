@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>My YouTube</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://accounts.google.com/gsi/client"></script>
 <style>
 :root {
   --bg: #0f0f0f;
@@ -477,20 +477,45 @@ function toast(msg, ms=2800) {
 }
 
 // ── LOGIN
-document.getElementById('loginBtn').addEventListener('click', ()=>{
-  if(typeof google==='undefined'){toast('Loading Google Sign-In...'); return;}
-  google.accounts.oauth2.initTokenClient({
-    client_id: CLIENT_ID, scope: SCOPES,
-    callback: async r => {
-      if(r.error){toast('Sign-in error: '+r.error); return;}
-      token = r.access_token;
-      await fetchUser();
-      document.getElementById('login-screen').style.display='none';
-      document.getElementById('app').style.display='block';
-      loadSubChannels();
-      navigate('home');
+function doLogin(){
+  if(typeof google==='undefined'){
+    toast('⏳ Still loading, please wait 2 seconds and try again...');
+    return;
+  }
+  try {
+    google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: SCOPES,
+      callback: async r => {
+        if(r.error){ toast('Sign-in error: ' + r.error); return; }
+        token = r.access_token;
+        await fetchUser();
+        document.getElementById('login-screen').style.display='none';
+        document.getElementById('app').style.display='block';
+        loadSubChannels();
+        navigate('home');
+      }
+    }).requestAccessToken();
+  } catch(e) {
+    toast('❌ Login failed: ' + e.message);
+    console.error('Login error:', e);
+  }
+}
+
+// Wait for Google script to be ready then enable button
+document.getElementById('loginBtn').addEventListener('click', doLogin);
+window.addEventListener('load', function(){
+  var tries = 0;
+  var check = setInterval(function(){
+    tries++;
+    if(typeof google !== 'undefined'){
+      clearInterval(check);
+      console.log('Google Sign-In ready!');
+    } else if(tries > 30){
+      clearInterval(check);
+      document.getElementById('loginBtn').textContent = '⚠ Reload page and try again';
     }
-  }).requestAccessToken();
+  }, 300);
 });
 
 async function fetchUser(){
