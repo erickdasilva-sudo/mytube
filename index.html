@@ -5,7 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="theme-color" content="#0f0f0f">
 <title>YouTube Lite</title>
+
+<!-- PWA: iOS install support -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="YouTube Lite">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="application-name" content="YouTube Lite">
+<meta name="format-detection" content="telephone=no">
+
+<!-- Icons (SVG-based, work as iOS apple-touch-icon and browser favicon) -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ff0000'/%3E%3Cpolygon points='25,18 25,46 48,32' fill='white'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAEXklEQVR4nO3dPW7UQBQH8H/HFKTjACkpSAEKSgoKCkRBTYEoEAUFNQUFBaJAFBSIAnECBOICnIBwAk7ACThBNvNgrPUmu/Z8vPdm5v9JK21gd23P2/ezz2NvAUREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREVHJzgF4DOAtgN8AjgB8L+xrAVwHcAfAEwBPAdwAsBA8FNQAuAvgC4DvAPYj+pxfGgB3APwx7q9rGADrAH4ZD7T0cFgD8C8w0NUIgPMAvjYwwOVXvgAYK/YXdwGcLPC4awVXAVxQDvb6KcwIKxQAvVL4BXgI4FxCiUoNCQ8LCYDVATVL4hngI8CTgKDxFAANkkr+1QC9DAGuBgWN94wCYKHkP1c63a5R4iEQXAFKgCx6FDgGuAIosEkKQH8FKBkAcwT4DLBSn3wJ0PgVoLQA3AOAlYrkbDsAznHr6ZZJRkLgGAtABAuAwJoAi62hMqsG+CkAjgM6PB39pEHdRwBZJ7CtNRMA7IOPS/NKAyB/9whAfwEoBgKADwBPDyW8M8COAtBVgBJOAZ50DwHAcwCfPBJ+CcCtBGNQrQDoFwBeQQt2vPxHNQNiOYI6yLvSxMACUJYANSEhWAGiEPSc/J0MBchSyoBBADyz/D+lq4DkO4G9Ja1H5j4U6Lqj7v7CSqACPyABMD8dzHfsXZbZ/mLO8nUVXAA8hnu3y50cwj9bI+0RoOQA2P7CUiB7BjXAroLrxZJ7CkYBgfo9eJpXgCo5BeixrwAlpkD2DKptpxBLApBVgKw3hKRf1n0XUL8LQM4tQOsUYMI3BrUWAGwI/AcOBb8EAFLfHB4sBcQIwH4LMNUPgK53+DEAUfxiUOMsAFkAimdQvRGgxhRYcAUomAJxCMA/J3lq+aV5BQjSaQrEABg/sOKAgYIVoJAU0PhWNrr+JoBYCsiTArwa6BMDR4AIVoCONwdxBABoXwFmGQEcWwGNFnwj+EagAMQOgIY3hQpAAdjnG0EaAcg6BnAEsK8APN/sBmjUE8ER4CYAA1FmAUgkVRyA/B1AjwDcCk6BPGsB6AhAPi5tBtgIANsAaJoBmlcD4FcsAA1LAGZ4tu6MKgBNqwKPK4DGxLcK0DgwDgCsAOTjBh4F/oMAYBWAWQA0VgEa9wTeAOg9CwMACkFOJEQA4u4HiOgGUOQGEa9SEgGowaFHpCsBmO4PYLM4VIBQAagXjQuM7QC0BJjvAnAPwI+OyUEKfwGcA/AewKGiH4EH/ABwHcCRkjA/B/AEwHmlYWYRgCEh3ipYAfBO0fH0HpTBGEDPCQAvRQbAnyWqj6xLAEAY+IXoLAAAlGQF+CMEwHs1AfA/CVbpOgC8VxOA/+IsoAU1AbB1HQxw1jOAQuAegOICsHAdDAuAvxIA6yTgFAGw0PEMbAVgB6BvBPB/X5b/WgRAfQDg/79Vmpf4AYz/zT5cFwTfAAAAAElFTkSuQmCC">
+
+<!-- Inline PWA manifest (no separate file needed) -->
+<link rel="manifest" href="data:application/manifest+json;charset=utf-8;base64,ewogICJuYW1lIjogIllvdVR1YmUgTGl0ZSIsCiAgInNob3J0X25hbWUiOiAiWVQgTGl0ZSIsCiAgInN0YXJ0X3VybCI6ICIuIiwKICAic2NvcGUiOiAiLiIsCiAgImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsCiAgIm9yaWVudGF0aW9uIjogImFueSIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiIzBmMGYwZiIsCiAgInRoZW1lX2NvbG9yIjogIiMwZjBmMGYiLAogICJkZXNjcmlwdGlvbiI6ICJBIGNsZWFuLCBkaXN0cmFjdGlvbi1saWdodCB3YXkgdG8gYnJvd3NlIFlvdVR1YmUuIiwKICAiY2F0ZWdvcmllcyI6IFsiZW50ZXJ0YWlubWVudCIsICJ2aWRlbyJdLAogICJsYW5nIjogImVuIiwKICAiaWNvbnMiOiBbCiAgICB7CiAgICAgICJzcmMiOiAiZGF0YTppbWFnZS9zdmcreG1sLCUzQ3N2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA1MTIgNTEyJyUzRSUzQ3JlY3Qgd2lkdGg9JzUxMicgaGVpZ2h0PSc1MTInIHJ4PScxMTInIGZpbGw9JyUyM2ZmMDAwMCcvJTNFJTNDcG9seWdvbiBwb2ludHM9JzIwMCwxNDQgMjAwLDM2OCAzODQsMjU2JyBmaWxsPSd3aGl0ZScvJTNFJTNDL3N2ZyUzRSIsCiAgICAgICJzaXplcyI6ICJhbnkiLAogICAgICAidHlwZSI6ICJpbWFnZS9zdmcreG1sIiwKICAgICAgInB1cnBvc2UiOiAiYW55IG1hc2thYmxlIgogICAgfQogIF0KfQ==">
+
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 
@@ -450,6 +465,37 @@ let currentNav = 'home';
 
 document.documentElement.dataset.theme = theme;
 
+// PWA: detect standalone mode (already installed to home screen)
+const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+// Show a one-time iOS install hint to users on iOS Safari who haven't installed yet
+function showIOSInstallHint(){
+  if (!isIOS || isStandalone) return;
+  if (localStorage.getItem('ytl_install_hint_dismissed')) return;
+  // Only show in Safari (not in-app browsers like Brave/Chrome on iOS, where the share→Add to Home Screen flow doesn't exist)
+  const ua = navigator.userAgent;
+  const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS|Brave/.test(ua);
+  if (!isSafari) return;
+  setTimeout(() => {
+    const hint = document.createElement('div');
+    hint.style.cssText = 'position:fixed;bottom:80px;left:14px;right:14px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;z-index:1000;box-shadow:0 12px 40px rgba(0,0,0,0.5);font-size:0.85rem;line-height:1.45;';
+    hint.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+        <div style="flex:1;">
+          <div style="font-weight:700;margin-bottom:4px;">📱 Install YouTube Lite</div>
+          <div style="color:var(--muted);">Tap the Share button <span style="display:inline-block;border:1px solid var(--muted);border-radius:4px;padding:0 5px;font-size:0.75rem;">⬆</span> below, then "Add to Home Screen".</div>
+        </div>
+        <button id="dismissInstallHint" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.2rem;padding:0;">✕</button>
+      </div>`;
+    document.body.appendChild(hint);
+    document.getElementById('dismissInstallHint').addEventListener('click', () => {
+      localStorage.setItem('ytl_install_hint_dismissed', '1');
+      hint.remove();
+    });
+  }, 4000);
+}
+
 // LOGIN
 function waitForGoogle(){
   return new Promise((resolve, reject) => {
@@ -508,6 +554,7 @@ async function onLoginSuccess(){
     loadSubChannels();
     navigate('home');
     toast('Welcome' + (user.name ? ', ' + user.name.split(' ')[0] : '') + '! 👋');
+    showIOSInstallHint();
   } catch (e) {
     showLoginError('Profile load failed: ' + e.message);
   }
